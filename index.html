@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>TravelSpend ✈️ - Production Expense Manager</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-secondary: #ffffff;
+            --bg-card: #ffffff;
+            --text-primary: #0f172a;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+            --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+            --gradient-primary: linear-gradient(135deg, #1a237e 0%, #6a1b9a 100%);
+            --primary: #5c6bc0;
+            --success: #43a047;
+            --danger: #e53935;
+        }
+
+        [data-theme="dark"] {
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-card: #1e1e2e;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --border-color: #333333;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); transition: background 0.3s; padding-bottom: 80px; }
+
+        /* --- UI COMPONENTS --- */
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+        
+        .header { 
+            background: var(--gradient-primary); color: white; padding: 1.5rem 2rem; border-radius: 24px; 
+            margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: var(--shadow-xl); position: sticky; top: 10px; z-index: 100;
+        }
+        .logo { font-family: 'Poppins', sans-serif; font-size: 1.5rem; font-weight: 700; }
+
+        .dashboard-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-bottom: 2rem; }
+        .card { 
+            background: var(--bg-card); border-radius: 24px; padding: 1.5rem; box-shadow: var(--shadow-lg); 
+            border: 1px solid var(--border-color); transition: 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); }
+        .stat-value { font-size: 2.2rem; font-weight: 700; font-family: 'Poppins'; color: var(--primary); }
+
+        .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem; }
+        @media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
+
+        /* --- TABLE --- */
+        .table-container { background: var(--bg-card); border-radius: 24px; padding: 1.5rem; overflow-x: auto; border: 1px solid var(--border-color); }
+        table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        th { text-align: left; padding: 12px; color: var(--text-secondary); font-size: 0.8rem; text-transform: uppercase; border-bottom: 2px solid var(--border-color); }
+        td { padding: 12px; border-bottom: 1px solid var(--border-color); font-size: 0.9rem; }
+
+        /* --- FORM OVERLAY (BOTTOM SHEET) --- */
+        .form-overlay { 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); 
+            backdrop-filter: blur(10px); z-index: 1000; display: none; 
+        }
+        .form-container { 
+            position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-card); 
+            border-radius: 32px 32px 0 0; max-height: 90vh; overflow-y: auto; padding: 2rem; 
+            transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .form-overlay.active { display: block; }
+        .form-overlay.active .form-container { transform: translateY(0); }
+
+        /* --- BUTTONS --- */
+        .btn { padding: 0.8rem 1.5rem; border: none; border-radius: 12px; font-weight: 600; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; }
+        .btn-primary { background: var(--gradient-primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+        .fab { position: fixed; bottom: 2rem; right: 2rem; width: 60px; height: 60px; border-radius: 50%; background: var(--gradient-primary); color: white; font-size: 1.5rem; border: none; box-shadow: var(--shadow-xl); cursor: pointer; z-index: 999; }
+
+        /* --- FORM ELEMENTS --- */
+        .form-group { position: relative; margin-bottom: 1.5rem; }
+        .form-input, .form-select { width: 100%; padding: 1rem; border: 2px solid var(--border-color); border-radius: 12px; background: var(--bg-secondary); color: var(--text-primary); font-family: inherit; }
+        .form-label { position: absolute; top: 1rem; left: 1rem; color: var(--text-secondary); pointer-events: none; transition: 0.2s; background: var(--bg-card); padding: 0 5px; }
+        .form-input:focus ~ .form-label, .form-input:not(:placeholder-shown) ~ .form-label { top: -10px; font-size: 0.8rem; color: var(--primary); font-weight: 600; }
+
+        .toggle-group { display: flex; gap: 10px; margin-bottom: 1.5rem; }
+        .toggle-option { flex: 1; padding: 1rem; border: 2px solid var(--border-color); border-radius: 12px; text-align: center; cursor: pointer; font-weight: 600; }
+        .toggle-option.active { border-color: var(--primary); background: rgba(92,107,192,0.1); color: var(--primary); }
+
+        .line-item { border: 2px solid var(--border-color); padding: 1rem; border-radius: 16px; margin-bottom: 1rem; position: relative; }
+        .remove-line { position: absolute; top: 10px; right: 10px; color: var(--danger); cursor: pointer; font-weight: bold; }
+
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--success); color: white; padding: 1rem 2rem; border-radius: 50px; box-shadow: var(--shadow-xl); display: none; z-index: 2000; }
+        
+        /* Mobile Nav */
+        .mobile-nav { position: fixed; bottom: 0; left: 0; right: 0; background: var(--bg-card); display: flex; justify-content: space-around; padding: 10px; border-top: 1px solid var(--border-color); z-index: 100; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; font-size: 0.7rem; color: var(--text-secondary); cursor: pointer; }
+        .nav-item.active { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="header">
+            <div class="logo">✈️ TravelSpend</div>
+            <button class="btn" style="background:rgba(255,255,255,0.2); color:white;" onclick="toggleTheme()">🌙</button>
+        </header>
+
+        <div class="dashboard-grid">
+            <div class="card">
+                <div class="stat-value" id="totalSpent">₹0</div>
+                <div style="color: var(--text-secondary)">Total Spent (INR)</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" id="totalEntries">0</div>
+                <div style="color: var(--text-secondary)">Total Entries</div>
+            </div>
+            <div class="card">
+                <div class="stat-value" id="topCategory">-</div>
+                <div style="color: var(--text-secondary)">Top Expense Category</div>
+            </div>
+        </div>
+
+        <div class="charts-grid">
+            <div class="card"><canvas id="typeChart" height="200"></canvas></div>
+            <div class="card"><canvas id="trendChart" height="200"></canvas></div>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <input type="date" id="filterStart" class="form-input" style="padding: 0.5rem;" onchange="renderApp()">
+                <span>to</span>
+                <input type="date" id="filterEnd" class="form-input" style="padding: 0.5rem;" onchange="renderApp()">
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button class="btn btn-success" onclick="exportData('xlsx')">📗 XLSX</button>
+                <button class="btn btn-danger" onclick="exportData('pdf')">📕 PDF</button>
+                <button class="btn btn-primary" onclick="exportData('html')">📘 HTML</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Ref</th>
+                        <th>Platform</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Amount</th>
+                        <th>INR Total</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="expenseBody"></tbody>
+            </table>
+        </div>
+        
+        <div style="text-align: center; margin-top: 2rem;">
+            <button class="btn" style="color: var(--danger); border: 1px solid var(--danger);" onclick="clearAllData()">🗑️ Reset Database</button>
+        </div>
+    </div>
+
+    <div class="form-overlay" id="formOverlay" onclick="closeForm(event)">
+        <div class="form-container" id="formContainer">
+            <h2 style="font-family: 'Poppins'; margin-bottom: 1.5rem;">Log New Expense</h2>
+            
+            <form id="expenseForm" onsubmit="handleSubmit(event)">
+                <div class="form-group">
+                    <input type="text" id="ref" class="form-input" placeholder=" " required>
+                    <label class="form-label">Receipt Reference</label>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="form-group">
+                        <input type="date" id="date" class="form-input" required>
+                        <label class="form-label">Date</label>
+                    </div>
+                    <div class="form-group">
+                        <select id="payment" class="form-select">
+                            <option value="UPI">UPI</option>
+                            <option value="Cash">Cash</option>
+                        </select>
+                        <label class="form-label">Payment Type</label>
+                    </div>
+                </div>
+
+                <div class="toggle-group">
+                    <div class="toggle-option" id="cabYes" onclick="toggleCab(true)">🚖 Cab Booked</div>
+                    <div class="toggle-option active" id="cabNo" onclick="toggleCab(false)">🚶 Not Booked</div>
+                </div>
+
+                <div id="cabBranch" style="display: none;">
+                    <div class="form-group">
+                        <select id="cabPlatform" class="form-select">
+                            <option value="Uber">Uber</option>
+                            <option value="Ola">Ola</option>
+                            <option value="Rapido">Rapido</option>
+                            <option value="Bharat Taxi">Bharat Taxi</option>
+                            <option value="Namma Yatri">Namma Yatri</option>
+                            <option value="InDrive">InDrive</option>
+                        </select>
+                        <label class="form-label">Booking Platform</label>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <input type="text" id="start" class="form-input" placeholder=" ">
+                            <label class="form-label">Start Location</label>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="end" class="form-input" placeholder=" ">
+                            <label class="form-label">End Location</label>
+                        </div>
+                    </div>
+                    <div class="toggle-group">
+                        <div class="toggle-option active" id="tripOne" onclick="setTripType('One Side')">One Side</div>
+                        <div class="toggle-option" id="tripRound" onclick="setTripType('Round Trip')">Round Trip</div>
+                    </div>
+
+                    <h4 style="margin-bottom: 10px;">Expense Breakdown</h4>
+                    <div id="lineItems"></div>
+                    <button type="button" class="btn btn-primary" style="width: 100%; margin-bottom: 1rem;" onclick="addLineItem()">+ Add Another Expense</button>
+                </div>
+
+                <div id="noCabBranch">
+                    <div class="form-group">
+                        <select id="simpleType" class="form-select" onchange="handleSimpleTypeChange()">
+                            <option value="Commute to Client Place">Commute to Client Place</option>
+                            <option value="Metro Travel">Metro Travel</option>
+                            <option value="Nominal Food & Beverage">Nominal Food & Beverage</option>
+                        </select>
+                        <label class="form-label">Expense Type</label>
+                    </div>
+
+                    <div id="simpleLocFields" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div class="form-group">
+                            <input type="text" id="sStart" class="form-input" placeholder=" ">
+                            <label class="form-label">Start</label>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="sEnd" class="form-input" placeholder=" ">
+                            <label class="form-label">End</label>
+                        </div>
+                    </div>
+
+                    <div id="simpleTripToggle" class="toggle-group" style="display:none;">
+                        <div class="toggle-option active" id="sTripOne" onclick="setSimpleTrip('One Side')">One Side</div>
+                        <div class="toggle-option" id="sTripRound" onclick="setSimpleTrip('Round Trip')">Round Trip</div>
+                    </div>
+
+                    <div class="form-group">
+                        <input type="number" id="sAmount" class="form-input" placeholder=" ">
+                        <label class="form-label">Amount</label>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1.2rem; font-size: 1.1rem;">🚀 Save Expense</button>
+            </form>
+        </div>
+    </div>
+
+    <button class="fab" onclick="openForm()">+</button>
+    <div class="toast" id="toast">✅ Expense Saved!</div>
+
+    <script>
+        let expenses = JSON.parse(localStorage.getItem('travelspend_db')) || [];
+        let isCab = false;
+        let cabTripType = 'One Side';
+        let simpleTripType = 'One Side';
+        let charts = {};
+
+        // --- CORE LOGIC ---
+
+        function toggleCab(val) {
+            isCab = val;
+            document.getElementById('cabYes').classList.toggle('active', val);
+            document.getElementById('cabNo').classList.toggle('active', !val);
+            document.getElementById('cabBranch').style.display = val ? 'block' : 'none';
+            document.getElementById('noCabBranch').style.display = val ? 'none' : 'block';
+            if(val && document.querySelectorAll('.line-item').length === 0) addLineItem('Commute to Client Place');
+        }
+
+        function handleSimpleTypeChange() {
+            const type = document.getElementById('simpleType').value;
+            const isTransport = type === 'Metro Travel' || type === 'Commute to Client Place';
+            document.getElementById('simpleLocFields').style.display = isTransport ? 'grid' : 'none';
+            document.getElementById('simpleTripToggle').style.display = (type === 'Metro Travel') ? 'flex' : 'none';
+        }
+
+        function addLineItem(defaultType = 'Metro Travel') {
+            const id = Date.now() + Math.random();
+            const div = document.createElement('div');
+            div.className = 'line-item';
+            div.id = `line_${id}`;
+            div.innerHTML = `
+                <span class="remove-line" onclick="document.getElementById('line_${id}').remove()">×</span>
+                <div class="form-group">
+                    <select class="form-select line-type" onchange="handleLineTypeChange('${id}')">
+                        <option value="Commute to Client Place" ${defaultType === 'Commute to Client Place' ? 'selected' : ''}>Commute to Client Place</option>
+                        <option value="Metro Travel" ${defaultType === 'Metro Travel' ? 'selected' : ''}>Metro Travel</option>
+                        <option value="Nominal Food & Beverage" ${defaultType === 'Nominal Food & Beverage' ? 'selected' : ''}>Nominal Food & Beverage</option>
+                    </select>
+                </div>
+                <div id="metroToggle_${id}" class="toggle-group" style="display:${defaultType === 'Metro Travel' ? 'flex' : 'none'};">
+                    <div class="toggle-option active" id="lTripOne_${id}" onclick="setLineTrip('${id}', 'One Side')">One Side</div>
+                    <div class="toggle-option" id="lTripRound_${id}" onclick="setLineTrip('${id}', 'Round Trip')">Round Trip</div>
+                </div>
+                <input type="hidden" id="lTripVal_${id}" value="One Side">
+                <div class="form-group">
+                    <input type="number" class="form-input line-amt" placeholder=" " required>
+                    <label class="form-label">Amount (INR)</label>
+                </div>
+            `;
+            document.getElementById('lineItems').appendChild(div);
+        }
+
+        function handleLineTypeChange(id) {
+            const type = document.querySelector(`#line_${id} .line-type`).value;
+            document.getElementById(`metroToggle_${id}`).style.display = (type === 'Metro Travel') ? 'flex' : 'none';
+        }
+
+        function setLineTrip(id, type) {
+            document.getElementById(`lTripOne_${id}`).classList.toggle('active', type === 'One Side');
+            document.getElementById(`lTripRound_${id}`).classList.toggle('active', type === 'Round Trip');
+            document.getElementById(`lTripVal_${id}`).value = type;
+        }
+
+        function setTripType(val) {
+            cabTripType = val;
+            document.getElementById('tripOne').classList.toggle('active', val === 'One Side');
+            document.getElementById('tripRound').classList.toggle('active', val === 'Round Trip');
+        }
+
+        function setSimpleTrip(val) {
+            simpleTripType = val;
+            document.getElementById('sTripOne').classList.toggle('active', val === 'One Side');
+            document.getElementById('sTripRound').classList.toggle('active', val === 'Round Trip');
+        }
+
+        // --- SUBMISSION LOGIC ---
+
+        function handleSubmit(e) {
+            e.preventDefault();
+            const common = {
+                ref: document.getElementById('ref').value,
+                date: document.getElementById('date').value,
+                pay: document.getElementById('payment').value,
+                cabBooked: isCab ? 'Yes' : 'No'
+            };
+
+            let newRows = [];
+
+            if (isCab) {
+                const platform = document.getElementById('cabPlatform').value;
+                const start = document.getElementById('start').value;
+                const end = document.getElementById('end').value;
+                const lines = document.querySelectorAll('.line-item');
+
+                lines.forEach((line, index) => {
+                    const id = line.id.replace('line_', '');
+                    const type = line.querySelector('.line-type').value;
+                    const amount = parseFloat(line.querySelector('.line-amt').value);
+                    const lineTrip = document.getElementById(`lTripVal_${id}`).value;
+
+                    let finalInr = amount;
+                    let desc = (index === 0) ? `${cabTripType} from ${start} to ${end}` : type;
+                    
+                    // Logic: Round trip multiplier for Metro
+                    if (type === 'Metro Travel' && lineTrip === 'Round Trip') {
+                        finalInr = amount * 2;
+                        desc += " (Round Trip Auto-calc x2)";
+                    }
+
+                    newRows.push({
+                        ...common,
+                        // Logic: Only fill platform for first line item
+                        platform: (index === 0) ? platform : "-",
+                        type,
+                        desc,
+                        amt: amount,
+                        inr: finalInr,
+                        currency: 'INR'
+                    });
+                });
+            } else {
+                const type = document.getElementById('simpleType').value;
+                const amount = parseFloat(document.getElementById('sAmount').value);
+                let finalInr = amount;
+                let desc = type;
+
+                if (type === 'Metro Travel') {
+                    desc = `${simpleTripType} Metro from ${document.getElementById('sStart').value} to ${document.getElementById('sEnd').value}`;
+                    if (simpleTripType === 'Round Trip') {
+                        finalInr = amount * 2;
+                        desc += " (Auto-calc x2)";
+                    }
+                } else if (type === 'Commute to Client Place') {
+                    desc = `Commute from ${document.getElementById('sStart').value} to ${document.getElementById('sEnd').value}`;
+                }
+
+                newRows.push({
+                    ...common,
+                    platform: "-",
+                    type,
+                    desc,
+                    amt: amount,
+                    inr: finalInr,
+                    currency: 'INR'
+                });
+            }
+
+            expenses = [...expenses, ...newRows];
+            localStorage.setItem('travelspend_db', JSON.stringify(expenses));
+            
+            showToast();
+            confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+            document.getElementById('expenseForm').reset();
+            closeForm();
+            renderApp();
+        }
+
+        // --- APP ENGINE ---
+
+        function renderApp() {
+            const start = document.getElementById('filterStart').value;
+            const end = document.getElementById('filterEnd').value;
+            const tbody = document.getElementById('expenseBody');
+            tbody.innerHTML = '';
+
+            let filtered = expenses;
+            if(start && end) filtered = expenses.filter(e => e.date >= start && e.date <= end);
+
+            let total = 0;
+            let cats = {};
+
+            filtered.sort((a,b) => new Date(b.date) - new Date(a.date)).forEach((exp, idx) => {
+                total += exp.inr;
+                cats[exp.type] = (cats[exp.type] || 0) + exp.inr;
+                
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${exp.date}</td>
+                    <td><b>${exp.ref}</b></td>
+                    <td><span style="background:#f1f5f9; padding:4px 8px; border-radius:6px; font-size:0.75rem">${exp.platform}</span></td>
+                    <td>${exp.type}</td>
+                    <td style="color:var(--text-secondary); font-size:0.8rem">${exp.desc}</td>
+                    <td>${exp.amt}</td>
+                    <td style="font-weight:700">₹${exp.inr}</td>
+                    <td><button onclick="deleteRow(${idx})" style="border:none; background:none; cursor:pointer">🗑️</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            document.getElementById('totalSpent').innerText = `₹${total.toLocaleString()}`;
+            document.getElementById('totalEntries').innerText = filtered.length;
+            
+            const top = Object.entries(cats).sort((a,b) => b[1]-a[1])[0];
+            document.getElementById('topCategory').innerText = top ? top[0].split(' ')[0] : '-';
+
+            updateCharts(filtered);
+        }
+
+        function updateCharts(data) {
+            const types = {};
+            data.forEach(e => types[e.type] = (types[e.type] || 0) + e.inr);
+
+            if(charts.type) charts.type.destroy();
+            charts.type = new Chart(document.getElementById('typeChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(types),
+                    datasets: [{ data: Object.values(types), backgroundColor: ['#5c6bc0', '#6a1b9a', '#43a047', '#fb8c00'] }]
+                },
+                options: { responsive: true, plugins: { title: { display: true, text: 'Spend by Category' } } }
+            });
+        }
+
+        function exportData(format) {
+            const headers = ["Receipt Ref", "Date", "Payment", "Cab Booked", "Platform", "Type", "Description", "Amt", "Currency", "Total (INR)"];
+            const data = expenses.map(e => [e.ref, e.date, e.pay, e.cabBooked, e.platform, e.type, e.desc, e.amt, e.currency, e.inr]);
+
+            if (format === 'xlsx') {
+                const wb = XLSX.utils.book_new();
+                const ws = XLSX.utils.aoa_to_sheet([headers, ...data]);
+                XLSX.utils.book_append_sheet(wb, ws, "Expenses");
+                XLSX.writeFile(wb, "TravelSpend_Report.xlsx");
+            } else if (format === 'pdf') {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF('l');
+                doc.text("TravelSpend Expense Report", 14, 15);
+                doc.autoTable({ head: [headers], body: data, startY: 20, theme: 'grid' });
+                doc.save("TravelSpend_Report.pdf");
+            } else {
+                let html = `<html><body><h2>TravelSpend Report</h2><table border="1"><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr>`;
+                data.forEach(r => html += `<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`);
+                html += "</table></body></html>";
+                const blob = new Blob([html], {type:'text/html'});
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = "Report.html";
+                a.click();
+            }
+        }
+
+        function openForm() { document.getElementById('formOverlay').classList.add('active'); }
+        function closeForm(e) { if(!e || e.target.id === 'formOverlay') document.getElementById('formOverlay').classList.remove('active'); }
+        function showToast() { const t = document.getElementById('toast'); t.style.display = 'block'; setTimeout(() => t.style.display='none', 3000); }
+        function deleteRow(i) { if(confirm("Delete this entry?")) { expenses.splice(i, 1); localStorage.setItem('travelspend_db', JSON.stringify(expenses)); renderApp(); } }
+        function clearAllData() { if(confirm("Wipe entire database?")) { expenses = []; localStorage.clear(); renderApp(); } }
+        function toggleTheme() { document.documentElement.dataset.theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; }
+
+        // Init
+        document.getElementById('date').valueAsDate = new Date();
+        renderApp();
+    </script>
+</body>
+</html>
